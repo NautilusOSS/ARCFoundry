@@ -1,0 +1,25 @@
+name: Validate Proposals
+
+on:
+  push:
+    paths:
+      - 'drafts/**'
+      - 'proto/**'
+      - 'submitted/**'
+  pull_request:
+    paths:
+      - 'drafts/**'
+      - 'proto/**'
+      - 'submitted/**'
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Validate proposals
+        run: ./scripts/validate.sh

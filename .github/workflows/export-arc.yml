@@ -1,0 +1,30 @@
+name: Export ARC Proposal
+
+on:
+  workflow_dispatch:
+    inputs:
+      proto_file:
+        description: 'Path to the proto file to export (e.g. proto/my-proposal.md)'
+        required: true
+        type: string
+
+jobs:
+  export:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Make scripts executable
+        run: chmod +x scripts/*.sh
+
+      - name: Validate source file
+        run: ./scripts/validate.sh
+
+      - name: Export to ARC format
+        run: ./scripts/export-arc.sh "${{ github.event.inputs.proto_file }}"
+
+      - name: Upload export artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: arc-export
+          path: exports/
