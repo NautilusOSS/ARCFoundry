@@ -72,19 +72,15 @@ A native payment transaction that satisfies the APAIR-1 validation rules.
 
 A bot account becomes paired when it receives its **first inbound transaction** and that transaction satisfies the APAIR-1 pairing rules.
 
-A **first inbound transaction** is defined as the first payment transaction received by the account on a given network. Only standalone transactions (group size of 1) with the exact pairing amount qualify. Zero-amount payments, asset transfers, inner transactions from application calls, rekey transactions, and any transaction that is part of a group do not qualify and, if received before a valid pairing transaction, permanently disqualify the account from pairing on that network.
+A **first inbound transaction** is defined as the first payment transaction received by the account. Only standalone transactions (group size of 1) with the exact pairing amount qualify. Zero-amount payments, asset transfers, inner transactions from application calls, rekey transactions, and any transaction that is part of a group do not qualify and, if received before a valid pairing transaction, permanently disqualify the account from pairing.
 
-If any non-qualifying transaction is received before a valid pairing transaction, the account is no longer eligible for pairing on that network.
+If any non-qualifying transaction is received before a valid pairing transaction, the account is no longer eligible for pairing.
 
 The sender of the pairing transaction becomes the paired controller.
 
-### Cross-Network Pairing
+Pairing occurs on a single network. There is no cross-network pairing; a bot account is paired on the network where the pairing transaction is submitted. Only mainnet networks (`voi`, `algorand`) are considered for production pairing. Testnet pairings are isolated and MUST NOT be treated as valid on mainnet.
 
-APAIR-1 supports pairing on both Voi and Algorand. When the same bot account address exists on multiple networks, the first valid pairing transaction on each network independently establishes pairing for that network.
-
-The first pairing transaction across all networks becomes the **primary authority**. However, if the bot account has received any inbound transaction on a given network before a valid pairing transaction arrives on that network, the account is permanently ineligible for pairing on that network.
-
-Only mainnet networks (`voi`, `algorand`) are considered for production pairing. Testnet pairings are isolated and MUST NOT be treated as valid on mainnet.
+Outbound transactions from the bot account are not relevant to pairing eligibility since the account is unfunded prior to pairing.
 
 ---
 
@@ -98,17 +94,19 @@ A transaction qualifies as an APAIR-1 pairing transaction if:
 4. Transaction group size is **1** (standalone, not part of a group)
 5. Receiver is the target bot account
 6. Transaction note contains a valid APAIR protocol payload
-7. The transaction is the **first inbound transaction received by the account** on that network
+7. The transaction is the **first inbound transaction received by the account**
 
 ---
 
 ## ARC-2 Note Format
 
-APAIR-1 uses the ARC-2 note convention.
+APAIR-1 uses the [ARC-2](https://arc.algorand.foundation/ARCs/arc-0002) note convention.
 
 `apair:u<data>`
 
 Where `u` indicates UTF-8 encoded data.
+
+The complete note payload MUST be UTF-8 encoded and MUST NOT exceed the network's transaction note size limit (1024 bytes on Algorand and Voi).
 
 ---
 
@@ -120,7 +118,7 @@ Fields:
 
 | Field | Description |
 |------|-------------|
-| 1 | protocol version |
+| 1 | protocol version (current: `1`) |
 | pair | action |
 | network | network identifier (`voi`, `algorand`, `voi-testnet`, `algorand-testnet`) |
 | definition_address | address defining the bot/agent policy (REQUIRED) |
@@ -154,7 +152,7 @@ An implementation MUST validate:
 - payload matches `1|pair|<network>|<definition_address>`
 - `network` field matches the network the transaction was submitted on
 - `definition_address` is a valid non-zero address
-- transaction is the **first inbound transaction** to the receiver on that network
+- transaction is the **first inbound transaction** to the receiver
 
 If valid:
 
@@ -173,9 +171,10 @@ An implementation MUST reject a pairing transaction if any of the following are 
 - Payload is malformed (missing fields, unrecognized version, invalid action)
 - `network` field does not match the network the transaction was submitted on
 - `definition_address` is the zero address or an invalid address
-- The receiver has already received any prior inbound transaction on that network
+- Sender and receiver are the same address
+- The receiver has already received any prior inbound transaction
 
-A rejected transaction MUST be ignored. If a non-qualifying transaction arrives before any valid pairing transaction, the account is permanently ineligible for pairing on that network.
+A rejected transaction MUST be ignored. If a non-qualifying transaction arrives before any valid pairing transaction, the account is permanently ineligible for pairing.
 
 ---
 
@@ -256,6 +255,10 @@ If the bot address leaks before pairing, a malicious actor could submit a valid 
 
 Strict first-transaction rules prevent race conditions after initialization.
 
+### Rekeying
+
+If a bot account is rekeyed after pairing, the paired controller recorded on-chain remains unchanged. However, the controller may no longer have authority to sign transactions on behalf of the bot account. Implementations SHOULD account for the possibility that the signing authority and the paired controller may diverge after a rekey.
+
 ### Auditability
 
 Controller assignment is permanently verifiable through the pairing transaction.
@@ -271,6 +274,14 @@ Recommended flow:
 3. Controller sends pairing transaction
 4. Pairing is detected
 5. Bot becomes active
+
+---
+
+## Version Handling
+
+The first field of the payload indicates the protocol version. The current version is `1`.
+
+Implementations that only support version `1` MUST reject pairing transactions with an unrecognized version number. Future versions MAY change the payload format, validation rules, or semantics. An implementation SHOULD NOT attempt to interpret a payload with a version it does not support.
 
 ---
 
